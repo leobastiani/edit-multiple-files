@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { isText } from "istextorbinary";
 import memoizee from "memoizee";
 import { $, fs, log, LogEntry } from "zx";

@@ -5,7 +5,7 @@
   "author": "Leonardo Guarnieri de Bastiani <leogbastiani@gmail.com>",
   "license": "MIT",
   "bin": {
-    "edit-multiple-files": "index.ts"
+    "edit-multiple-files": "./index.ts"
   },
   "dependencies": {
     "istextorbinary": "^6.0.0",
