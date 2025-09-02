@@ -1,8 +1,6 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
-import { isText } from "istextorbinary";
-import memoizee from "memoizee";
-import { $, fs, log, LogEntry } from "zx";
+import { $, log, LogEntry, fs } from "zx";
 
 $.log = (entry: LogEntry) => {
   switch (entry.kind) {
@@ -18,35 +16,28 @@ const file = fileProcessOutput.stdout.trim();
 await $`fd -t file > ${file}`;
 await $`$EDITOR ${file}`;
 
-const filesStr = (await Bun.file(file).text()).trim();
-const getBuffer = memoizee(async (file: string) => {
-  return Buffer.from(await Bun.file(file).arrayBuffer());
-});
-const files = await (async () => {
-  const files = filesStr.split("\n");
-  const ret: string[] = [];
-  for (const file of files) {
-    if (isText(file, await getBuffer(file))) {
-      ret.push(file);
-    }
-  }
-  return ret;
-})();
+const { stdout: filesStr } = await $`cat ${file}`;
+const files = filesStr.trim().split("\n");
 
-const handle = Bun.file(file).writer();
+const handle = await fs.open(file, "w");
 for (const fileName of files) {
-  handle.write(`============== ${fileName}\n\n`);
-  handle.write(
-    (await getBuffer(fileName)).toString() +
+  const charset = (await $`uchardet ${fileName}`).stdout.trim();
+  if(charset === "unknown") {
+    continue
+  }
+  await fs.write(handle, `============== ${fileName}\n\n`);
+  await fs.write(
+    handle,
+    (await fs.readFile(fileName, "utf8")) +
       (fileName === files[files.length - 1] ? "" : "\n")
   );
 }
-await handle.end();
-const oldContents = await Bun.file(file).text();
+await fs.close(handle);
+const oldContents = await fs.readFile(file, "utf8");
 
 await $`$EDITOR ${file}`;
 
-const contents = await Bun.file(file).text();
+const contents = await fs.readFile(file, "utf-8");
 
 function* getContents(content: string) {
   while (content) {
@@ -73,9 +64,11 @@ function* mixContents() {
     if (oldNext.done && newNext.done) {
       break;
     }
-    const [oldValue, newValue] = [oldNext.value!, newNext.value!];
-    if (oldValue[0] !== newValue[0] || oldValue[1] !== newValue[1]) {
-      yield [...oldValue, ...newValue];
+    if (
+      oldNext.value[0] !== newNext.value[0] ||
+      oldNext.value[1] !== newNext.value[1]
+    ) {
+      yield [...oldNext.value!, ...newNext.value!];
     }
   }
 }
@@ -95,6 +88,6 @@ for (const [oldName, oldContent, newName, newContent] of mixContents()) {
       kind: "cmd",
       verbose: true,
     });
-    await Bun.write(newName, newContent);
+    await fs.writeFile(newName, newContent);
   }
 }
